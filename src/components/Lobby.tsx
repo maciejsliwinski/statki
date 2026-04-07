@@ -13,11 +13,12 @@ export type GameContext = {
 
 type LobbyProps = {
   onEnterGame: (ctx: GameContext) => void
+  onSinglePlayer: () => void
 }
 
 const NICKNAME_KEY = 'statki_nickname'
 
-export default function Lobby({ onEnterGame }: LobbyProps) {
+export default function Lobby({ onEnterGame, onSinglePlayer }: LobbyProps) {
   const [nickname, setNickname]         = useState(() => sessionStorage.getItem(NICKNAME_KEY) ?? '')
   const [joinCode, setJoinCode]         = useState('')
   const [createdCode, setCreatedCode]   = useState<string | null>(null)
@@ -145,6 +146,20 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
       <h1 className="text-4xl font-bold text-white">Statki Multiplayer</h1>
 
       <div className="w-full max-w-sm flex flex-col gap-5">
+
+        {/* Single Player */}
+        <button
+          onClick={onSinglePlayer}
+          className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-base transition-colors flex items-center justify-center gap-2"
+        >
+          🤖 Gra z komputerem
+        </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-600" />
+          <span className="text-xs text-gray-500 shrink-0">lub multiplayer</span>
+          <div className="flex-1 h-px bg-gray-600" />
+        </div>
 
         {/* Pseudonim */}
         <div className="flex flex-col gap-1.5">
