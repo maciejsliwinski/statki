@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, getPlayerId, generateRoomCode } from '../lib/supabase'
 import Ranking from './Ranking'
+import Terms from './Terms'
 
 export type GameContext = {
   gameId: string
@@ -25,6 +26,7 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
   const [loading, setLoading]           = useState<'create' | 'join' | null>(null)
   const [error, setError]               = useState<string | null>(null)
   const [showRanking, setShowRanking]   = useState(false)
+  const [showTerms, setShowTerms]       = useState(false)
   const codeRef = useRef<HTMLInputElement>(null)
 
   // Zapisz pseudonim przy każdej zmianie
@@ -136,6 +138,7 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
   }
 
   if (showRanking) return <Ranking onBack={() => setShowRanking(false)} />
+  if (showTerms)   return <Terms onBack={() => setShowTerms(false)} />
 
   return (
     <div className="min-h-screen bg-gray-800 flex flex-col items-center justify-center gap-8 px-4 py-8">
@@ -225,12 +228,20 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
         )}
       </div>
 
-      <button
-        onClick={() => setShowRanking(true)}
-        className="text-sm text-gray-400 hover:text-gray-200 underline transition-colors"
-      >
-        🏆 Ranking
-      </button>
+      <div className="flex flex-col items-center gap-3">
+        <button
+          onClick={() => setShowTerms(true)}
+          className="text-sm text-gray-400 hover:text-gray-200 underline transition-colors"
+        >
+          📋 Regulamin
+        </button>
+        <button
+          onClick={() => setShowRanking(true)}
+          className="text-sm text-gray-400 hover:text-gray-200 underline transition-colors"
+        >
+          🏆 Ranking
+        </button>
+      </div>
 
       <footer className="text-xs text-gray-500 text-center px-4">
         Zwibekodowane podczas warsztatów z narzędzi MCP + VibeCoding.
