@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, getPlayerId, generateRoomCode } from '../lib/supabase'
+import Ranking from './Ranking'
 
 export type GameContext = {
   gameId: string
@@ -23,6 +24,7 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
   const [waitingForGuest, setWaitingForGuest] = useState(false)
   const [loading, setLoading]           = useState<'create' | 'join' | null>(null)
   const [error, setError]               = useState<string | null>(null)
+  const [showRanking, setShowRanking]   = useState(false)
   const codeRef = useRef<HTMLInputElement>(null)
 
   // Zapisz pseudonim przy każdej zmianie
@@ -77,7 +79,7 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
       const code = generateRoomCode()
       const { data, error: err } = await supabase
         .from('games')
-        .insert({ host_id: playerId, code, status: 'pending' })
+        .insert({ host_id: playerId, code, status: 'pending', host_nickname: nickname.trim() })
         .select('id, code')
         .single()
       if (!err && data) { game = data; break }
@@ -124,7 +126,7 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
 
     const { error: joinErr } = await supabase
       .from('games')
-      .update({ guest_id: playerId, status: 'placing' })
+      .update({ guest_id: playerId, status: 'placing', guest_nickname: nickname.trim() })
       .eq('id', game.id)
 
     if (joinErr) { setError('Błąd dołączania: ' + joinErr.message); setLoading(null); return }
@@ -132,6 +134,8 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
     setLoading(null)
     onEnterGame({ gameId: game.id, code: game.code, role: 'guest', nickname: nickname.trim(), playerId })
   }
+
+  if (showRanking) return <Ranking onBack={() => setShowRanking(false)} />
 
   return (
     <div className="min-h-screen bg-gray-800 flex flex-col items-center justify-center gap-8 px-4 py-8">
@@ -220,6 +224,13 @@ export default function Lobby({ onEnterGame }: LobbyProps) {
           </div>
         )}
       </div>
+
+      <button
+        onClick={() => setShowRanking(true)}
+        className="text-sm text-gray-400 hover:text-gray-200 underline transition-colors"
+      >
+        🏆 Ranking
+      </button>
 
       <footer className="text-xs text-gray-500 text-center px-4">
         Zwibekodowane podczas warsztatów z narzędzi MCP + VibeCoding.
