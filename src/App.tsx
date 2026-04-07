@@ -274,6 +274,9 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
   // Koniec gry
   const [gameOver, setGameOver] = useState<{ winner: 'host' | 'guest' } | null>(null)
 
+  // Timer tury
+  const [timeLeft, setTimeLeft] = useState(30)
+
   // Refy do centrum łodzi podwodnych — potrzebne do obliczenia startu torpedy
   const leftSubRef  = useRef<HTMLDivElement>(null)
   const rightSubRef = useRef<HTMLDivElement>(null)
@@ -446,6 +449,26 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
     return () => { supabase.removeChannel(channel) }
   }, [ctx.gameId, ctx.role])
 
+  // ---- Timer tury ----
+
+  // Reset do 30 przy każdej zmianie tury (i po załadowaniu)
+  useEffect(() => {
+    if (loaded) setTimeLeft(30)
+  }, [currentTurn, loaded])
+
+  // Odliczanie — tylko aktywny gracz strzela po upływie czasu
+  useEffect(() => {
+    if (!loaded || gameOver) return
+    if (timeLeft <= 0) {
+      if (isMyTurn) {
+        supabase.from('games').update({ current_turn: opponentRole }).eq('id', ctx.gameId)
+      }
+      return
+    }
+    const t = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
+    return () => clearTimeout(t)
+  }, [timeLeft, loaded, gameOver, isMyTurn, opponentRole, ctx.gameId])
+
   // ---- Strzelanie ----
 
   function handleCellRightClick(row: number, col: number) {
@@ -515,16 +538,34 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
         </p>
       </div>
 
-      {/* Wskaźnik tury */}
+      {/* Wskaźnik tury + timer */}
       <div className={[
-        'px-8 py-3 rounded-xl border text-center font-semibold text-lg transition-all duration-300',
+        'w-full max-w-sm rounded-xl border overflow-hidden transition-all duration-300',
         isMyTurn
-          ? 'bg-green-500/20 border-green-500 text-green-300'
-          : 'bg-gray-700/40 border-gray-600 text-gray-400',
+          ? 'bg-green-500/20 border-green-500'
+          : 'bg-gray-700/40 border-gray-600',
       ].join(' ')}>
-        {isMyTurn
-          ? '🎯 Twoja tura — Strzelaj!'
-          : '⏳ Tura przeciwnika…'}
+        <div className="flex items-center justify-between px-6 py-3">
+          <span className={`font-semibold text-lg ${isMyTurn ? 'text-green-300' : 'text-gray-400'}`}>
+            {isMyTurn ? '🎯 Twoja tura — Strzelaj!' : '⏳ Tura przeciwnika…'}
+          </span>
+          <span className={[
+            'text-2xl font-mono font-bold tabular-nums w-10 text-right',
+            timeLeft > 15 ? 'text-green-400' : timeLeft > 8 ? 'text-yellow-400' : 'text-red-400',
+          ].join(' ')}>
+            {timeLeft}
+          </span>
+        </div>
+        {/* Pasek postępu — kurczy się w lewo */}
+        <div className="h-1 bg-gray-700">
+          <div
+            className={[
+              'h-full transition-all duration-1000 ease-linear',
+              timeLeft > 15 ? 'bg-green-500' : timeLeft > 8 ? 'bg-yellow-400' : 'bg-red-500',
+            ].join(' ')}
+            style={{ width: `${(timeLeft / 30) * 100}%` }}
+          />
+        </div>
       </div>
 
       {/* Powiadomienie o zatopieniu */}
