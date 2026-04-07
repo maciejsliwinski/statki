@@ -598,7 +598,7 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
       ))}
 
       {/* Obszar gry: łodzie + plansze */}
-      <div className="flex items-center gap-4">
+      <div className="w-full flex items-center gap-4">
 
         {/* Moja łódź (lewa) */}
         <div
@@ -610,17 +610,17 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
         </div>
 
         {/* Plansze */}
-        <div className="flex flex-col lg:flex-row items-center lg:items-start gap-8">
+        <div className="w-full flex flex-col lg:flex-row lg:w-auto items-center lg:items-start gap-8">
 
           {/* Moja plansza — tylko do odczytu */}
-          <div className="flex flex-col items-center gap-2" data-board="mine">
+          <div className="w-full lg:w-auto flex flex-col items-center gap-2" data-board="mine">
             <h2 className="text-sm font-semibold text-gray-300">Moja flota</h2>
             <Board grid={myGrid} readonly />
           </div>
 
           {/* Plansza przeciwnika — klikalna tylko w mojej turze */}
           <div
-            className={`flex flex-col items-center gap-2 transition-opacity duration-200 ${!isMyTurn ? 'opacity-50' : ''}`}
+            className={`w-full lg:w-auto flex flex-col items-center gap-2 transition-opacity duration-200 ${!isMyTurn ? 'opacity-50' : ''}`}
             data-board="opponent"
           >
             <h2 className={`text-sm font-semibold ${isMyTurn ? 'text-green-400' : 'text-gray-400'}`}>
