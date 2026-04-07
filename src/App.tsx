@@ -3,7 +3,9 @@ import Board, { type CellState } from './components/Board'
 import ShipPanel from './components/ShipPanel'
 import Lobby, { type GameContext } from './components/Lobby'
 import { supabase } from './lib/supabase'
-import { SHIP_DEFS, getShipCells, isValidPlacement, type Orientation } from './store/ships'
+import { SHIP_DEFS, getShipCells, isValidPlacement, findShips, type Orientation } from './store/ships'
+
+const TOTAL_SHIPS = SHIP_DEFS.reduce((sum, s) => sum + s.total, 0)  // 5
 
 // ----------------------------------------------------------------
 // Pomocniki
@@ -261,6 +263,17 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
   // Drżenie mojej łodzi po trafieniu
   const [shakeLeft, setShakeLeft] = useState(false)
 
+  // Powiadomienie o zatopieniu
+  const [notification, setNotification] = useState<{ msg: string; id: number } | null>(null)
+  const prevSunkRef   = useRef({ my: 0, opp: 0 })
+  const wasLoadedRef  = useRef(false)
+
+  // Flagi na planszy przeciwnika (lokalny stan, nie zapisywany do bazy)
+  const [flaggedCells, setFlaggedCells] = useState<Set<string>>(new Set())
+
+  // Koniec gry
+  const [gameOver, setGameOver] = useState<{ winner: 'host' | 'guest' } | null>(null)
+
   // Refy do centrum łodzi podwodnych — potrzebne do obliczenia startu torpedy
   const leftSubRef  = useRef<HTMLDivElement>(null)
   const rightSubRef = useRef<HTMLDivElement>(null)
@@ -300,27 +313,83 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
     }])
   }
 
-  // ---- Siatki pochodne ----
+  // ---- Siatki pochodne (z wykrywaniem zatopionych statków) ----
 
-  // Moja plansza: własne statki + strzały przeciwnika naniesione jako hit/miss
-  const myGrid = useMemo<CellState[][]>(() => {
-    const grid = myShipGrid.map(r => [...r] as CellState[])
-    for (const s of shots) {
-      if (s.shooter === opponentRole) grid[s.row][s.col] = s.result
-    }
-    return grid
-  }, [myShipGrid, shots, opponentRole])
+  const { myGrid, opponentGrid, mySunkCount, oppSunkCount } = useMemo(() => {
+    // --- Moja plansza ---
+    const myG = myShipGrid.map(r => [...r] as CellState[])
+    const oppShots = shots.filter(s => s.shooter === opponentRole)
+    for (const s of oppShots) myG[s.row][s.col] = s.result
 
-  // Plansza przeciwnika: wyłącznie moje strzały (statki ukryte)
-  const opponentGrid = useMemo<CellState[][]>(() => {
-    const grid = createEmptyGrid()
-    for (const s of shots) {
-      if (s.shooter === ctx.role) grid[s.row][s.col] = s.result
+    let mySunkCount = 0
+    const myShips = findShips(myShipGrid as string[][])
+    for (const shipCells of myShips) {
+      if (shipCells.every(([r, c]) => oppShots.some(s => s.row === r && s.col === c && s.result === 'hit'))) {
+        mySunkCount++
+        for (const [r, c] of shipCells) myG[r][c] = 'sunk'
+      }
     }
-    return grid
-  }, [shots, ctx.role])
+
+    // --- Plansza przeciwnika ---
+    const oppG = createEmptyGrid()
+    const myShots = shots.filter(s => s.shooter === ctx.role)
+    for (const s of myShots) oppG[s.row][s.col] = s.result
+
+    let oppSunkCount = 0
+    if (oppShipGrid) {
+      const oppShips = findShips(oppShipGrid as string[][])
+      for (const shipCells of oppShips) {
+        if (shipCells.every(([r, c]) => myShots.some(s => s.row === r && s.col === c && s.result === 'hit'))) {
+          oppSunkCount++
+          for (const [r, c] of shipCells) oppG[r][c] = 'sunk'
+        }
+      }
+    }
+
+    return { myGrid: myG, opponentGrid: oppG, mySunkCount, oppSunkCount }
+  }, [myShipGrid, oppShipGrid, shots, opponentRole, ctx.role])
 
   const isMyTurn = currentTurn === ctx.role
+
+  // ---- Powiadomienia o zatopionach ----
+
+  useEffect(() => {
+    if (!loaded) return
+    if (!wasLoadedRef.current) {
+      wasLoadedRef.current = true
+      prevSunkRef.current = { my: mySunkCount, opp: oppSunkCount }
+      return
+    }
+    if (oppSunkCount > prevSunkRef.current.opp) {
+      setNotification({ msg: '💥 Zatopiony!', id: Date.now() })
+    } else if (mySunkCount > prevSunkRef.current.my) {
+      setNotification({ msg: '💀 Twój statek zatopiony!', id: Date.now() })
+    }
+    prevSunkRef.current = { my: mySunkCount, opp: oppSunkCount }
+  }, [mySunkCount, oppSunkCount, loaded])
+
+  useEffect(() => {
+    if (!notification) return
+    const t = setTimeout(() => setNotification(null), 3000)
+    return () => clearTimeout(t)
+  }, [notification])
+
+  // ---- Koniec gry — wykrycie po stronie zwycięzcy ----
+  // Przegrany dowie się przez Realtime (games UPDATE status='finished')
+
+  useEffect(() => {
+    if (!loaded || gameOver) return
+    if (oppSunkCount === TOTAL_SHIPS) {
+      // Wygrałem — zapisuję do bazy (przegrany dowie się przez Realtime)
+      setGameOver({ winner: ctx.role })
+      supabase.from('games')
+        .update({ status: 'finished', winner: ctx.role })
+        .eq('id', ctx.gameId)
+    } else if (mySunkCount === TOTAL_SHIPS) {
+      // Przegrałem — wykrywam lokalnie z mySunkCount, nie czekam na Realtime
+      setGameOver({ winner: opponentRole })
+    }
+  }, [oppSunkCount, mySunkCount, loaded, gameOver, ctx.role, opponentRole, ctx.gameId])
 
   // ---- Ładowanie danych ----
 
@@ -367,8 +436,11 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${ctx.gameId}` },
         (payload) => {
-          const g = payload.new as { current_turn: 'host' | 'guest' }
+          const g = payload.new as { current_turn: 'host' | 'guest'; status: string; winner: string | null }
           setCurrentTurn(g.current_turn)
+          if (g.status === 'finished' && g.winner) {
+            setGameOver({ winner: g.winner as 'host' | 'guest' })
+          }
         })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -376,9 +448,22 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
 
   // ---- Strzelanie ----
 
+  function handleCellRightClick(row: number, col: number) {
+    // Przełącz flagę tylko na pustych polach planszy przeciwnika
+    if (opponentGrid[row][col] !== 'empty') return
+    const key = `${row},${col}`
+    setFlaggedCells(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
   async function handleShoot(row: number, col: number) {
-    if (!isMyTurn || shooting || opponentGrid[row][col] !== 'empty' || !oppShipGrid) return
+    if (!isMyTurn || shooting || opponentGrid[row][col] === 'hit' || opponentGrid[row][col] === 'miss' || opponentGrid[row][col] === 'sunk' || !oppShipGrid) return
     setShooting(true)
+    // Usuń flagę ze strzelanego pola
+    setFlaggedCells(prev => { const next = new Set(prev); next.delete(`${row},${col}`); return next })
     // Torpeda z lewej łodzi w kierunku klikniętego pola na planszy przeciwnika
     if (leftSubRef.current) launchTorpedo(leftSubRef.current, 'opponent', row, col)
 
@@ -442,6 +527,17 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
           : '⏳ Tura przeciwnika…'}
       </div>
 
+      {/* Powiadomienie o zatopieniu */}
+      {notification && (
+        <div
+          key={notification.id}
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-8 py-4 rounded-2xl bg-gray-900 border-2 border-yellow-400 text-yellow-300 font-bold text-2xl shadow-2xl cursor-pointer select-none"
+          onClick={() => setNotification(null)}
+        >
+          {notification.msg}
+        </div>
+      )}
+
       {/* Torpedy w locie — position:fixed, na wierzchu wszystkiego */}
       {torpedoes.map(t => (
         <div
@@ -492,6 +588,8 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
               grid={opponentGrid}
               readonly={!isMyTurn || shooting}
               onCellClick={handleShoot}
+              flaggedCells={flaggedCells}
+              onCellRightClick={handleCellRightClick}
             />
           </div>
 
@@ -509,6 +607,31 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
         <a href="https://apius.pl" target="_blank" rel="noopener noreferrer"
           className="underline hover:text-gray-300 transition-colors">Apius Technologies</a>{' '}2026
       </footer>
+
+      {/* Overlay końca gry */}
+      {gameOver && (
+        <div className="fixed inset-0 z-50 bg-gray-900/85 flex items-center justify-center px-4">
+          <div className="flex flex-col items-center gap-6 p-10 rounded-3xl bg-gray-800 border-2 border-yellow-400 shadow-2xl text-center">
+            <div className="text-7xl">
+              {gameOver.winner === ctx.role ? '🏆' : '💀'}
+            </div>
+            <h2 className="text-4xl font-bold text-white">
+              {gameOver.winner === ctx.role ? 'Wygrałeś!' : 'Przegrałeś!'}
+            </h2>
+            <p className="text-gray-400">
+              {gameOver.winner === ctx.role
+                ? 'Zatopiłeś całą flotę przeciwnika!'
+                : 'Twoja flota została zatopiona.'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg transition-colors"
+            >
+              Zagraj jeszcze raz
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

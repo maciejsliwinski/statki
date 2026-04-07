@@ -62,3 +62,30 @@ export function isValidPlacement(
   }
   return true
 }
+
+// Wykrywa statki jako grupy połączonych pól 'ship' (BFS po sąsiedztwie 4-kierunkowym)
+export function findShips(grid: string[][]): Array<[number, number][]> {
+  const visited = Array.from({ length: 10 }, () => Array(10).fill(false))
+  const ships: Array<[number, number][]> = []
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (grid[r][c] === 'ship' && !visited[r][c]) {
+        const cells: [number, number][] = []
+        const queue: [number, number][] = [[r, c]]
+        while (queue.length > 0) {
+          const [row, col] = queue.shift()!
+          if (visited[row][col]) continue
+          visited[row][col] = true
+          cells.push([row, col])
+          for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+            const nr = row + dr, nc = col + dc
+            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && grid[nr][nc] === 'ship' && !visited[nr][nc])
+              queue.push([nr, nc])
+          }
+        }
+        ships.push(cells)
+      }
+    }
+  }
+  return ships
+}

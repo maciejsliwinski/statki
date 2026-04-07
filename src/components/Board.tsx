@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { getShipCells, isValidPlacement, type Orientation } from '../store/ships'
 
 // Typy stanu pojedynczego pola
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss'
+export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk'
 
 type PlacementShip = { size: number; orientation: Orientation }
 
@@ -19,6 +19,9 @@ type BoardProps = {
   // Kliknięcie na już postawiony statek — pozwala go przestawić
   onShipPickup?: (row: number, col: number) => void
   onOrientationToggle?: () => void
+  // --- Flagi (prawy przycisk) na planszy przeciwnika ---
+  flaggedCells?: Set<string>
+  onCellRightClick?: (row: number, col: number) => void
 }
 
 const ROWS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
@@ -51,6 +54,7 @@ function cellShootClass(state: CellState, isReadonly: boolean): string {
     // Trafione/spudłowane — bez hover, cursor-default niezależnie od trybu
     case 'hit':   return 'bg-red-600 cursor-default'
     case 'miss':  return 'bg-white cursor-default'
+    case 'sunk':  return 'bg-red-900 cursor-default'
   }
 }
 
@@ -64,6 +68,7 @@ function cellPlacementClass(state: CellState, inPreview: boolean, previewValid: 
     case 'ship':  return 'bg-gray-500 hover:bg-gray-400 cursor-pointer'
     case 'hit':   return 'bg-red-600'
     case 'miss':  return 'bg-white'
+    case 'sunk':  return 'bg-red-900'
   }
 }
 
@@ -76,6 +81,8 @@ export default function Board({
   onShipPlaced,
   onShipPickup,
   onOrientationToggle,
+  flaggedCells,
+  onCellRightClick,
 }: BoardProps) {
   const [internalGrid, setInternalGrid] = useState<CellState[][]>(createTestGrid())
   const [animCell, setAnimCell] = useState<{ row: number; col: number } | null>(null)
@@ -161,12 +168,18 @@ export default function Board({
             const key = `${row},${col}`
             const inPreview = preview.cells.has(key)
 
+            const isFlagged = flaggedCells?.has(key) && state === 'empty'
+
             return (
               <button
                 key={col}
                 onClick={() => handleClick(row, col)}
                 onMouseEnter={() => placementMode && setHoverCell({ row, col })}
                 onAnimationEnd={() => setAnimCell(null)}
+                onContextMenu={(e) => {
+                  if (placementMode) return  // obsłużone przez wrapper div
+                  if (onCellRightClick) { e.preventDefault(); onCellRightClick(row, col) }
+                }}
                 className={[
                   'flex-1 md:w-12 md:flex-none aspect-square',
                   'border border-blue-800 transition-colors duration-75',
@@ -174,6 +187,7 @@ export default function Board({
                   placementMode
                     ? cellPlacementClass(state, inPreview, preview.valid)
                     : cellShootClass(state, readonly),
+                  isFlagged ? '!bg-yellow-400/40' : '',
                   animCell?.row === row && animCell?.col === col ? 'cell-pop' : '',
                 ].join(' ')}
                 title={`${letter}${col + 1}`}
@@ -186,9 +200,15 @@ export default function Board({
                 {state === 'hit' && (
                   <span className="flame text-base md:text-xl">🔥</span>
                 )}
+                {state === 'sunk' && (
+                  <span className="text-base md:text-xl leading-none">💀</span>
+                )}
                 {/* Widoczne statki w trybie rozmieszczania i na własnej planszy */}
                 {placementMode && state === 'ship' && (
                   <span className="text-xs md:text-sm leading-none">🚢</span>
+                )}
+                {isFlagged && (
+                  <span className="text-base md:text-xl leading-none">🏴‍☠️</span>
                 )}
               </button>
             )
