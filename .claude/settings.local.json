@@ -16,7 +16,11 @@
       "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")",
       "Bash(npm run:*)",
       "Bash(curl -s http://localhost:5173)",
-      "mcp__claude_ai_Supabase__list_organizations"
+      "mcp__claude_ai_Supabase__list_organizations",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }
