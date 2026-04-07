@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Board, { type CellState } from './components/Board'
 import ShipPanel from './components/ShipPanel'
 import Lobby, { type GameContext } from './components/Lobby'
+import SinglePlayer from './components/SinglePlayer'
 import { supabase } from './lib/supabase'
 import { SHIP_DEFS, getShipCells, isValidPlacement, findShips, type Orientation } from './store/ships'
 
@@ -17,7 +18,7 @@ function createEmptyGrid(): CellState[][] {
 
 type PlacedShip   = { id: string; size: number; row: number; col: number; orientation: Orientation }
 type SelectedShip = { id: string; size: number; orientation: Orientation }
-type Screen       = 'lobby' | 'placing' | 'playing'
+type Screen       = 'lobby' | 'placing' | 'playing' | 'singleplayer'
 
 // Aktywna animacja torpedy — jeden egzemplarz na strzał
 type TorpedoAnim = {
@@ -688,7 +689,8 @@ export default function App() {
 
   function handleEnterGame(ctx: GameContext) { setGameCtx(ctx); setScreen('placing') }
 
+  if (screen === 'singleplayer')         return <SinglePlayer onBack={() => setScreen('lobby')} />
   if (screen === 'playing' && gameCtx)  return <PlayingScreen ctx={gameCtx} />
   if (screen === 'placing' && gameCtx)  return <PlacingScreen ctx={gameCtx} onGameStart={() => setScreen('playing')} />
-  return <Lobby onEnterGame={handleEnterGame} />
+  return <Lobby onEnterGame={handleEnterGame} onSinglePlayer={() => setScreen('singleplayer')} />
 }
