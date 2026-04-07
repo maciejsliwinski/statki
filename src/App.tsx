@@ -388,6 +388,7 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
       supabase.from('games')
         .update({ status: 'finished', winner: ctx.role })
         .eq('id', ctx.gameId)
+        .then()   // konieczne — bez .then() Supabase nie wysyła zapytania
     } else if (mySunkCount === TOTAL_SHIPS) {
       // Przegrałem — wykrywam lokalnie z mySunkCount, nie czekam na Realtime
       setGameOver({ winner: opponentRole })
