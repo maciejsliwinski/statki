@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Read(//c/Users/MaciejŚliwiński/AppData/Local/Programs//**)",
+      "Read(//c/Users/MaciejŚliwiński/AppData/Roaming/**)",
+      "Bash(cmd /c \"where node\")",
+      "Bash(cmd /c \"where npm\")",
+      "Bash(cmd /c \"node --version\")",
+      "Bash(cmd /c \"npm --version\")",
+      "Bash(cmd /c \"pnpm --version\")",
+      "Bash(cmd /c \"yarn --version\")",
+      "Bash(npm install:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:5173)",
+      "mcp__claude_ai_Supabase__list_organizations"
+    ]
+  }
+}

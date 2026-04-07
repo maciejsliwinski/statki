@@ -1,12 +1,22 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { getShipCells, isValidPlacement, type Orientation } from '../store/ships'
 
 // Typy stanu pojedynczego pola
 export type CellState = 'empty' | 'ship' | 'hit' | 'miss'
 
+type PlacementShip = { size: number; orientation: Orientation }
+
 type BoardProps = {
-  // Opcjonalna inicjalna siatka — jeśli nie podana, generuje pustą z testowym statkiem
+  // Zewnętrzna siatka — jeśli nie podana, plansza używa wewnętrznego stanu testowego
   grid?: CellState[][]
   onCellClick?: (row: number, col: number) => void
+  // --- Tryb rozmieszczania statków ---
+  placementMode?: boolean
+  placementShip?: PlacementShip | null
+  onShipPlaced?: (row: number, col: number) => void
+  // Kliknięcie na już postawiony statek — pozwala go przestawić
+  onShipPickup?: (row: number, col: number) => void
+  onOrientationToggle?: () => void
 }
 
 const ROWS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
@@ -24,18 +34,21 @@ function createTestGrid(): CellState[][] {
   const grid: CellState[][] = Array.from({ length: 10 }, () =>
     Array(10).fill('empty')
   )
-  // Testowy statek: B3–B5
   grid[1][2] = 'ship'
   grid[1][3] = 'ship'
   grid[1][4] = 'ship'
-  // Testowy statek: E7–G7
   grid[4][6] = 'ship'
   grid[5][6] = 'ship'
   grid[6][6] = 'ship'
   return grid
 }
 
-function cellBaseClass(state: CellState): string {
+function createEmptyGrid(): CellState[][] {
+  return Array.from({ length: 10 }, () => Array(10).fill('empty'))
+}
+
+// Kolor pola w trybie strzelania
+function cellShootClass(state: CellState): string {
   switch (state) {
     case 'empty': return 'bg-blue-500 hover:bg-blue-300 active:bg-blue-200'
     case 'ship':  return 'bg-gray-500 hover:bg-gray-400 active:bg-gray-300'
@@ -44,30 +57,81 @@ function cellBaseClass(state: CellState): string {
   }
 }
 
-export default function Board({ grid: externalGrid, onCellClick }: BoardProps) {
-  const [grid, setGrid] = useState<CellState[][]>(externalGrid ?? createTestGrid())
-  // Osobna siatka ikon dla pudła — losowana w momencie trafienia
+// Kolor pola w trybie rozmieszczania (bez CSS-hover — stan śledzony przez onMouseEnter)
+function cellPlacementClass(state: CellState, inPreview: boolean, previewValid: boolean): string {
+  if (inPreview) {
+    return previewValid
+      ? 'bg-green-400 border-green-500'
+      : 'bg-red-400 border-red-500'
+  }
+  switch (state) {
+    case 'empty': return 'bg-blue-500'
+    // Postawiony statek: hover wskazuje, że można go kliknąć i przestawić
+    case 'ship':  return 'bg-gray-500 hover:bg-gray-400 cursor-pointer'
+    case 'hit':   return 'bg-red-600'
+    case 'miss':  return 'bg-white'
+  }
+}
+
+export default function Board({
+  grid: externalGrid,
+  onCellClick,
+  placementMode = false,
+  placementShip = null,
+  onShipPlaced,
+  onShipPickup,
+  onOrientationToggle,
+}: BoardProps) {
+  // Wewnętrzna siatka — używana tylko w trybie testowym (nie-rozmieszczanie)
+  const [internalGrid, setInternalGrid] = useState<CellState[][]>(createTestGrid())
   const [missIcons, setMissIcons] = useState<(string | null)[][]>(
     () => Array.from({ length: 10 }, () => Array(10).fill(null))
   )
-  // Pole aktualnie animowane po kliknięciu
   const [animCell, setAnimCell] = useState<{ row: number; col: number } | null>(null)
+  // Pole pod kursorem w trybie rozmieszczania
+  const [hoverCell, setHoverCell] = useState<{ row: number; col: number } | null>(null)
+
+  // Aktywna siatka: w trybie rozmieszczania zawsze zewnętrzna
+  const activeGrid = placementMode
+    ? (externalGrid ?? createEmptyGrid())
+    : (externalGrid ?? internalGrid)
+
+  // Oblicz podgląd pozycji statku na podstawie hover
+  const preview = useMemo(() => {
+    if (!placementMode || !placementShip || !hoverCell) {
+      return { cells: new Set<string>(), valid: false }
+    }
+    const cells = getShipCells(hoverCell.row, hoverCell.col, placementShip.size, placementShip.orientation)
+    const cellSet = new Set(cells.map(([r, c]) => `${r},${c}`))
+    const valid = isValidPlacement(activeGrid, cells)
+    return { cells: cellSet, valid }
+  }, [placementMode, placementShip, hoverCell, activeGrid])
 
   function handleClick(row: number, col: number) {
-    setAnimCell({ row, col })
+    if (placementMode) {
+      // Kliknięcie na postawiony statek — podnieś go do przestawienia
+      if (activeGrid[row][col] === 'ship') {
+        onShipPickup?.(row, col)
+        return
+      }
+      if (!placementShip || !preview.valid) return
+      setAnimCell({ row, col })
+      onShipPlaced?.(row, col)
+      return
+    }
 
+    setAnimCell({ row, col })
     if (onCellClick) {
       onCellClick(row, col)
       return
     }
 
     // Domyślna obsługa kliknięcia (tryb testowy)
-    setGrid(prev => {
+    setInternalGrid(prev => {
       const next = prev.map(r => [...r])
       const current = next[row][col]
       if (current === 'empty') {
         next[row][col] = 'miss'
-        // Losuj ikonę pudła w tym samym przebiegu
         setMissIcons(icons => {
           const nextIcons = icons.map(r => [...r])
           nextIcons[row][col] = randomMissIcon()
@@ -80,12 +144,25 @@ export default function Board({ grid: externalGrid, onCellClick }: BoardProps) {
     })
   }
 
+  // Obsługa prawego przycisku myszy — obrót statku
+  function handleContextMenu(e: React.MouseEvent) {
+    if (!placementMode) return
+    e.preventDefault()
+    onOrientationToggle?.()
+  }
+
+  const cursorClass = placementMode
+    ? (placementShip ? 'cursor-crosshair' : 'cursor-default')
+    : 'cursor-pointer'
+
   return (
-    // Wrapper z max-width — na mobile zajmuje całą szerokość ekranu, na desktop jest wyśrodkowany
-    <div className="w-full max-w-[360px] md:max-w-fit mx-auto select-none">
+    <div
+      className={`w-full max-w-[360px] md:max-w-fit mx-auto select-none ${cursorClass}`}
+      onContextMenu={handleContextMenu}
+      onMouseLeave={() => setHoverCell(null)}
+    >
       {/* Nagłówek — numery kolumn */}
       <div className="flex">
-        {/* Pusty narożnik */}
         <div className="w-8 h-8 md:w-12 md:h-12 shrink-0" />
         {COLS.map(col => (
           <div
@@ -107,31 +184,38 @@ export default function Board({ grid: externalGrid, onCellClick }: BoardProps) {
 
           {/* Komórki */}
           {COLS.map((_, col) => {
-            const state = grid[row][col]
+            const state = activeGrid[row][col]
+            const key = `${row},${col}`
+            const inPreview = preview.cells.has(key)
+
             return (
               <button
                 key={col}
                 onClick={() => handleClick(row, col)}
+                onMouseEnter={() => placementMode && setHoverCell({ row, col })}
                 onAnimationEnd={() => setAnimCell(null)}
                 className={[
-                  // Na mobile: równe kolumny wypełniające szerokość; na desktop: stały rozmiar 48px
                   'flex-1 md:w-12 md:flex-none aspect-square',
-                  'border border-blue-800 transition-colors duration-100 cursor-pointer touch-manipulation',
-                  'flex items-center justify-center',
-                  cellBaseClass(state),
+                  'border border-blue-800 transition-colors duration-75',
+                  'flex items-center justify-center touch-manipulation',
+                  placementMode
+                    ? cellPlacementClass(state, inPreview, preview.valid)
+                    : cellShootClass(state),
                   animCell?.row === row && animCell?.col === col ? 'cell-pop' : '',
                 ].join(' ')}
                 title={`${letter}${col + 1}`}
               >
-                {/* Losowa ikona dna morskiego dla pudła */}
-                {state === 'miss' && (
+                {!placementMode && state === 'miss' && (
                   <span className="text-base md:text-xl leading-none">
                     {missIcons[row][col]}
                   </span>
                 )}
-                {/* Płomień dla trafienia */}
-                {state === 'hit' && (
+                {!placementMode && state === 'hit' && (
                   <span className="flame text-base md:text-xl">🔥</span>
+                )}
+                {/* W trybie rozmieszczania pokazuj 🚢 dla już postawionych statków */}
+                {placementMode && state === 'ship' && (
+                  <span className="text-xs md:text-sm leading-none">🚢</span>
                 )}
               </button>
             )
