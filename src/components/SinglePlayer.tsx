@@ -274,7 +274,7 @@ export default function SinglePlayer({ onBack }: Props) {
           <p className="text-sm text-gray-400 text-center">
             Rozstaw swoją flotę, a następnie kliknij <span className="text-white font-medium">Gotowy!</span>
           </p>
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
+          <div className="w-full flex flex-col lg:flex-row lg:w-auto items-center lg:items-start gap-6">
             <Board
               grid={placingGrid}
               placementMode
