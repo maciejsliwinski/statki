@@ -107,7 +107,11 @@ export default function Board({
 
     if (placementMode) {
       if (activeGrid[row][col] === 'ship') { onShipPickup?.(row, col); return }
-      if (!placementShip || !preview.valid) return
+      if (!placementShip) return
+      // Waliduj dla faktycznej pozycji kliknięcia, nie dla hoverCell —
+      // preview może być przedawniony gdy mysz i klik trafią w różne pola
+      const clickCells = getShipCells(row, col, placementShip.size, placementShip.orientation)
+      if (!isValidPlacement(activeGrid, clickCells)) return
       setAnimCell({ row, col })
       onShipPlaced?.(row, col)
       return
