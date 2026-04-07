@@ -140,7 +140,7 @@ export default function Board({
 
   return (
     <div
-      className={`w-full max-w-[360px] md:max-w-fit mx-auto select-none ${cursorClass}`}
+      className={`w-full max-w-[400px] md:max-w-fit mx-auto select-none ${cursorClass}`}
       onContextMenu={handleContextMenu}
       onMouseLeave={() => setHoverCell(null)}
     >
