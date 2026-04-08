@@ -89,6 +89,7 @@ export default function SinglePlayer({ onBack }: Props) {
   const [huntStack,    setHuntStack]   = useState<Array<[number, number]>>([])
   const [cpuThinking,  setCpuThinking] = useState(false)
   const [gameOver,     setGameOver]    = useState<'player' | 'cpu' | null>(null)
+  const [flaggedCells, setFlaggedCells] = useState<Set<string>>(new Set())
 
   // ---- Siatki pochodne ----
   const { playerDisplay, cpuDisplay, playerSunkCount, cpuSunkCount } = useMemo(() => {
@@ -242,8 +243,19 @@ export default function SinglePlayer({ onBack }: Props) {
     setPhase('playing')
   }
 
+  function handleCellRightClick(row: number, col: number) {
+    if (cpuDisplay[row][col] !== 'empty') return
+    const key = `${row},${col}`
+    setFlaggedCells(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
   function handlePlayerShoot(row: number, col: number) {
     if (!isPlayerTurn || cpuDisplay[row][col] !== 'empty' || !!gameOver) return
+    setFlaggedCells(prev => { const next = new Set(prev); next.delete(`${row},${col}`); return next })
     const result: 'hit' | 'miss' = cpuShipGrid[row][col] === 'ship' ? 'hit' : 'miss'
     setPlayerShots(prev => [...prev, { row, col, result }])
     if (result === 'miss') setIsPlayerTurn(false)
@@ -335,6 +347,8 @@ export default function SinglePlayer({ onBack }: Props) {
                 grid={cpuDisplay}
                 readonly={!isPlayerTurn || !!gameOver}
                 onCellClick={handlePlayerShoot}
+                flaggedCells={flaggedCells}
+                onCellRightClick={handleCellRightClick}
               />
             </div>
 
