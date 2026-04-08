@@ -463,7 +463,7 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
     if (!loaded || gameOver) return
     if (timeLeft <= 0) {
       if (isMyTurn) {
-        supabase.from('games').update({ current_turn: opponentRole }).eq('id', ctx.gameId)
+        supabase.from('games').update({ current_turn: opponentRole }).eq('id', ctx.gameId).then()
       }
       return
     }
@@ -599,7 +599,7 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
       ))}
 
       {/* Obszar gry: łodzie + plansze */}
-      <div className="w-full flex items-center gap-4">
+      <div className="w-full flex items-center justify-center gap-4">
 
         {/* Moja łódź (lewa) */}
         <div
@@ -611,7 +611,7 @@ function PlayingScreen({ ctx }: { ctx: GameContext }) {
         </div>
 
         {/* Plansze */}
-        <div className="w-full flex flex-col lg:flex-row lg:w-auto items-center lg:items-start gap-8">
+        <div className="w-full lg:w-auto flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8">
 
           {/* Moja plansza — tylko do odczytu */}
           <div className="w-full lg:w-auto flex flex-col items-center gap-2" data-board="mine">
